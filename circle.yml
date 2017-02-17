@@ -1,0 +1,30 @@
+# adapted from https://github.com/scikit-learn/scikit-learn/blob/master/circle.yml
+dependencies:
+
+  # Check whether the doc build is required, install build dependencies and
+  # run sphinx to build the doc.
+  override:
+    - ./build_tools/circle/build_doc.sh:
+       timeout: 3600 # seconds
+    - python scripts/run_api.py ../freediscovery_shared:
+       background: true
+    - sleep 20
+    # The pipefail is requested to propagate exit code
+    - set -o pipefail && cd doc && make html 2>&1 | tee ~/log.txt
+    - npm install -g bootprint && npm install -g bootprint-openapi
+    - cd doc && bootprint openapi http://0.0.0.0:5001/openapi-specs.json openapi-docs && cp -r openapi-docs/ _build/html/
+
+test:
+  # Grep error on the documentation
+  override:
+    - cat ~/log.txt && if grep -q "Traceback (most recent call last):" ~/log.txt; then false; else true; fi
+deployment:
+ push:
+   branch: /^master$|^[0-9]+\.[0-9]+\.X$/
+   commands:
+     - bash build_tools/circle/push_doc.sh
+general:
+  # Open the doc to the API
+  artifacts:
+    - "doc/_build/html"
+    - "~/log.txt"
